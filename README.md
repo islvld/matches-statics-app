@@ -1,70 +1,99 @@
-# Getting Started with Create React App
+# MatchStats - Веб-приложение для статистики матчей
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+## Описание проекта
+**MatchStats** — это веб-приложение для отображения статистики матчей по различным дисциплинам. Проект разработан с использованием **React** и **MySQL Workbench** без использования ORM, с реализацией **CRUD**-функционала и кастомного дизайна.
 
-## Available Scripts
+## Функционал
+- **Главная страница**:
+  - Отображает список доступных дисциплин (CS2, Valorant, Dota 2, Футбол, Хоккей и др.).
+  - Поле поиска по названию дисциплины
+- **Страница дисциплины**:
+  - Список матчей данной дисциплины.
+  - Каждый матч представлен в виде отдельного блока с информацией:
+    - Название турнира
+    - Дата/время начала
+    - Участвующие команды
+- **Страница матча**:
+  - Подробная информация о матче:
+    - Дата/время начала
+    - Участвующие команды
+    - Счет
+- **Поиск и фильтрация**:
+  - Возможность искать матчи по названию команд, дисциплины по названию.
+  - Отображение результатов поиска по нажатию Enter или кнопки "Продолжить".
 
-In the project directory, you can run:
+## Технологический стек
+- **Frontend**: React, JavaScript, CSS
+- **Backend**: Node.js (без использования ORM, чистый SQL)
+- **База данных**: MySQL
+- **Среда разработки**: VS Code
 
-### `npm start`
+## Структура базы данных
+### Таблица дисциплин (`disciplines`)
+```sql
+CREATE TABLE `disciplines` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `name` varchar(100) NOT NULL,
+  `description` text,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `name` (`name`)
+) ENGINE=InnoDB;
+```
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+### Таблица команд (`teams`)
+```sql
+CREATE TABLE `teams` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `name` varchar(100) NOT NULL,
+  `discipline_id` int DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  FOREIGN KEY (`discipline_id`) REFERENCES `disciplines` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB;
+```
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+### Таблица матчей (`matches`)
+```sql
+CREATE TABLE `matches` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `discipline_id` int DEFAULT NULL,
+  `team1_id` int DEFAULT NULL,
+  `team2_id` int DEFAULT NULL,
+  `start_time` timestamp NOT NULL,
+  `end_time` timestamp NULL DEFAULT NULL,
+  `winner_team_id` int DEFAULT NULL,
+  `status` enum('upcoming','ongoing','completed') DEFAULT 'upcoming',
+  PRIMARY KEY (`id`),
+  FOREIGN KEY (`discipline_id`) REFERENCES `disciplines` (`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`team1_id`) REFERENCES `teams` (`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`team2_id`) REFERENCES `teams` (`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`winner_team_id`) REFERENCES `teams` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB;
+```
 
-### `npm test`
+### Таблица статистики матчей (`match_statistics`)
+```sql
+CREATE TABLE `match_statistics` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `match_id` int DEFAULT NULL,
+  `team1_score` int DEFAULT NULL,
+  `team2_score` int DEFAULT NULL,
+  `additional_stats` json DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  FOREIGN KEY (`match_id`) REFERENCES `matches` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB;
+```
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
-
-### `npm run build`
-
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
-
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
-
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
-
-### `npm run eject`
-
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
-
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
-
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+### Таблица пользователей (`users`)
+```sql
+CREATE TABLE `users` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `username` varchar(100) NOT NULL,
+  `password_hash` varchar(255) NOT NULL,
+  `email` varchar(100) NOT NULL,
+  `role` enum('admin','moderator','user') DEFAULT 'user',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `username` (`username`),
+  UNIQUE KEY `email` (`email`)
+) ENGINE=InnoDB;
+```
