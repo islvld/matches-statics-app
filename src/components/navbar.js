@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import '../styles.css';
 
 const Navbar = ({ isLoggedIn, setIsLoggedIn }) => {
   const navigate = useNavigate();
@@ -11,7 +12,7 @@ const Navbar = ({ isLoggedIn, setIsLoggedIn }) => {
   };
 
   return (
-    <nav>
+    <nav className="navbar">
       <Link to="/">Главная</Link>
       {isLoggedIn ? (
         <button onClick={handleLogout}>Выйти</button>

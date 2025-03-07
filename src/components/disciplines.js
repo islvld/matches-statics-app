@@ -1,7 +1,8 @@
+import styled from 'styled-components';
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import styled from 'styled-components';
 import EditDisciplineModal from './editDisciplineModal';
+import '../styles.css'; // Импорт стилей
 
 const DisciplinesContainer = styled.div`
   padding: 20px;
@@ -38,6 +39,7 @@ const Disciplines = ({ isAdmin }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedDiscipline, setSelectedDiscipline] = useState(null);
+  const [errorMessage, setErrorMessage] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -55,53 +57,85 @@ const Disciplines = ({ isAdmin }) => {
     navigate(`/matches/${disciplineId}`);
   };
 
- const handleDelete = async (id) => {
-  const confirmDelete = window.confirm('Вы уверены, что хотите удалить дисциплину?');
-  if (confirmDelete) {
-    const token = localStorage.getItem('token');
-    const response = await fetch(`/api/disciplines/${id}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
-    });
+  const showError = (message) => {
+    setErrorMessage(message);
+    setTimeout(() => setErrorMessage(''), 3000);
+  };
 
-    if (response.ok) {
-      setDisciplines(disciplines.filter(d => d.id !== id));
+  const handleDelete = async (id) => {
+    if (!isAdmin) {
+      showError('Недостаточно прав для выполнения операции');
+      return;
     }
-  }
-};
 
-const handleSave = async (data) => {
-  const token = localStorage.getItem('token');
-  const url = selectedDiscipline ? `/api/disciplines/${selectedDiscipline.id}` : '/api/disciplines';
-  const method = selectedDiscipline ? 'PUT' : 'POST';
+    const confirmDelete = window.confirm('Вы уверены, что хотите удалить дисциплину?');
+    if (!confirmDelete) return;
 
-  console.log('Отправка данных на сервер:', data); // Логирование данных
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/disciplines/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-  try {
-    const response = await fetch(url, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(data),
-    });
+      if (response.status === 403) {
+        showError('Недостаточно прав для удаления дисциплин');
+        return;
+      }
 
-    if (response.ok) {
+      if (!response.ok) throw new Error('Ошибка при удалении');
+      
+      setDisciplines(disciplines.filter(d => d.id !== id));
+    } catch (error) {
+      showError(error.message);
+    }
+  };
+
+  const handleSave = async (data) => {
+    if (!isAdmin) {
+      showError('Недостаточно прав для выполнения операции');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const url = selectedDiscipline 
+        ? `/api/disciplines/${selectedDiscipline.id}`
+        : '/api/disciplines';
+      const method = selectedDiscipline ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (response.status === 403) {
+        showError('Недостаточно прав для изменения дисциплин');
+        return;
+      }
+
+      if (!response.ok) throw new Error('Ошибка при сохранении');
+
       const updatedDisciplines = await fetch('/api/disciplines').then(res => res.json());
       setDisciplines(updatedDisciplines);
-      setShowEditModal(false); // Закрытие модального окна
-      setSelectedDiscipline(null); // Сброс выбранной дисциплины
-    } else {
-      console.error('Ошибка при сохранении:', response.statusText);
+      setShowEditModal(false);
+      setSelectedDiscipline(null);
+    } catch (error) {
+      showError(error.message);
     }
-  } catch (error) {
-    console.error('Ошибка при отправке запроса:', error);
-  }
-};
+  };
 
   return (
     <DisciplinesContainer>
+      {errorMessage && (
+        <div className="error-message">
+          {errorMessage}
+        </div>
+      )}
       <h1>Дисциплины</h1>
       <SearchBar
         type="text"
@@ -110,10 +144,15 @@ const handleSave = async (data) => {
         onChange={(e) => setSearchTerm(e.target.value)}
       />
       {isAdmin && (
-        <button onClick={() => {
-          setSelectedDiscipline(null); // Сброс выбранной дисциплины для добавления
-          setShowEditModal(true);
-        }}>Добавить дисциплину</button>
+        <button
+          className="add-button"
+          onClick={() => {
+            setSelectedDiscipline(null); // Сброс выбранной дисциплины для добавления
+            setShowEditModal(true);
+          }}
+        >
+          Добавить дисциплину
+        </button>
       )}
       {filteredDisciplines.length > 0 ? (
         <div>
@@ -126,15 +165,25 @@ const handleSave = async (data) => {
               <p>{discipline.description || 'Описание отсутствует'}</p>
               {isAdmin && (
                 <div>
-                  <button onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedDiscipline(discipline);
-                    setShowEditModal(true);
-                  }}>✏️</button>
-                  <button onClick={(e) => {
-                    e.stopPropagation();
-                    handleDelete(discipline.id);
-                  }}>🗑️</button>
+                  <button
+                    className="edit-button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedDiscipline(discipline);
+                      setShowEditModal(true);
+                    }}
+                  >
+                    ✏️ Редактировать
+                  </button>
+                  <button
+                    className="delete-button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(discipline.id);
+                    }}
+                  >
+                    🗑️ Удалить
+                  </button>
                 </div>
               )}
             </DisciplineCard>

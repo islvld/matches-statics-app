@@ -104,16 +104,31 @@ const isAdmin = (req, res, next) => {
 // DISCIPLINES
 
 // Добавление дисциплины
-app.post('/api/disciplines', authenticate, isAdmin, (req, res) => {
-  const { name, description } = req.body;
+app.post('/api/disciplines', authenticate, isAdmin, async (req, res) => {
+  const connection = await db.getConnection();
+  
+  try {
+    await connection.beginTransaction();
+    
+    const [result] = await connection.query(
+      'INSERT INTO disciplines (name, description) VALUES (?, ?)',
+      [req.body.name, req.body.description]
+    );
 
-  const sql = 'INSERT INTO disciplines (name, description) VALUES (?, ?)';
-  db.query(sql, [name, description], (err, result) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
-    }
-    res.json({ message: 'Дисциплина успешно добавлена', id: result.insertId });
-  });
+    await connection.query(
+      'INSERT INTO audit_log (action, user_id) VALUES (?, ?)',
+      ['create_discipline', req.user.id]
+    );
+
+    await connection.commit();
+    res.json({ id: result.insertId });
+
+  } catch (error) {
+    await connection.rollback();
+    res.status(500).json({ error: "Transaction failed" });
+  } finally {
+    connection.release();
+  }
 });
 
 // Редактирование дисциплины
