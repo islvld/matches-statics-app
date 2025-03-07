@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
+import EditDisciplineModal from './editDisciplineModal';
 
 const DisciplinesContainer = styled.div`
   padding: 20px;
@@ -32,9 +33,11 @@ const DisciplineCard = styled.div`
   }
 `;
 
-const Disciplines = () => {
+const Disciplines = ({ isAdmin }) => {
   const [disciplines, setDisciplines] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedDiscipline, setSelectedDiscipline] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -52,6 +55,51 @@ const Disciplines = () => {
     navigate(`/matches/${disciplineId}`);
   };
 
+ const handleDelete = async (id) => {
+  const confirmDelete = window.confirm('Вы уверены, что хотите удалить дисциплину?');
+  if (confirmDelete) {
+    const token = localStorage.getItem('token');
+    const response = await fetch(`/api/disciplines/${id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (response.ok) {
+      setDisciplines(disciplines.filter(d => d.id !== id));
+    }
+  }
+};
+
+const handleSave = async (data) => {
+  const token = localStorage.getItem('token');
+  const url = selectedDiscipline ? `/api/disciplines/${selectedDiscipline.id}` : '/api/disciplines';
+  const method = selectedDiscipline ? 'PUT' : 'POST';
+
+  console.log('Отправка данных на сервер:', data); // Логирование данных
+
+  try {
+    const response = await fetch(url, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (response.ok) {
+      const updatedDisciplines = await fetch('/api/disciplines').then(res => res.json());
+      setDisciplines(updatedDisciplines);
+      setShowEditModal(false); // Закрытие модального окна
+      setSelectedDiscipline(null); // Сброс выбранной дисциплины
+    } else {
+      console.error('Ошибка при сохранении:', response.statusText);
+    }
+  } catch (error) {
+    console.error('Ошибка при отправке запроса:', error);
+  }
+};
+
   return (
     <DisciplinesContainer>
       <h1>Дисциплины</h1>
@@ -61,6 +109,12 @@ const Disciplines = () => {
         value={searchTerm}
         onChange={(e) => setSearchTerm(e.target.value)}
       />
+      {isAdmin && (
+        <button onClick={() => {
+          setSelectedDiscipline(null); // Сброс выбранной дисциплины для добавления
+          setShowEditModal(true);
+        }}>Добавить дисциплину</button>
+      )}
       {filteredDisciplines.length > 0 ? (
         <div>
           {filteredDisciplines.map((discipline) => (
@@ -70,11 +124,34 @@ const Disciplines = () => {
             >
               <h2>{discipline.name}</h2>
               <p>{discipline.description || 'Описание отсутствует'}</p>
+              {isAdmin && (
+                <div>
+                  <button onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedDiscipline(discipline);
+                    setShowEditModal(true);
+                  }}>✏️</button>
+                  <button onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(discipline.id);
+                  }}>🗑️</button>
+                </div>
+              )}
             </DisciplineCard>
           ))}
         </div>
       ) : (
         <p>Нет данных для отображения</p>
+      )}
+      {showEditModal && (
+        <EditDisciplineModal
+          discipline={selectedDiscipline}
+          onClose={() => {
+            setShowEditModal(false);
+            setSelectedDiscipline(null);
+          }}
+          onSave={handleSave}
+        />
       )}
     </DisciplinesContainer>
   );

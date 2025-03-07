@@ -5,6 +5,7 @@ const Register = () => {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
   const navigate = useNavigate();
 
   const handleRegister = async (e) => {
@@ -18,37 +19,44 @@ const Register = () => {
 
     const data = await response.json();
     if (response.ok) {
-      alert(data.message);
+      alert('Регистрация прошла успешно! Теперь вы можете войти.');
       navigate('/login');
     } else {
-      alert(data.error);
+      setError(data.error || 'Ошибка при регистрации');
     }
   };
 
   return (
     <div>
       <h1>Регистрация</h1>
+      {error && <p style={{ color: 'red' }}>{error}</p>}
       <form onSubmit={handleRegister}>
         <input
           type="text"
           placeholder="Имя пользователя"
           value={username}
           onChange={(e) => setUsername(e.target.value)}
+          required
         />
         <input
           type="email"
           placeholder="Email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          required
         />
         <input
           type="password"
           placeholder="Пароль"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          required
         />
         <button type="submit">Зарегистрироваться</button>
       </form>
+      <p>
+        Уже есть аккаунт? <a href="/login">Войдите</a>
+      </p>
     </div>
   );
 };

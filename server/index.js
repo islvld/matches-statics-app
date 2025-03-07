@@ -36,9 +36,9 @@ app.post('/api/register', async (req, res) => {
   const passwordHash = await bcrypt.hash(password, 10);
 
   const sql = `
-    INSERT INTO users (username, password_hash, email, role)
+    INSERT INTO users (username, email, password_hash, role)
     VALUES (?, ?, ?, ?)
-  `;
+  `; 
 
   db.query(sql, [username, email, passwordHash, role || 'user'], (err, result) => {
     if (err) {
@@ -102,6 +102,8 @@ const isAdmin = (req, res, next) => {
 };
 
 // DISCIPLINES
+
+// Добавление дисциплины
 app.post('/api/disciplines', authenticate, isAdmin, (req, res) => {
   const { name, description } = req.body;
 
@@ -111,6 +113,20 @@ app.post('/api/disciplines', authenticate, isAdmin, (req, res) => {
       return res.status(500).json({ error: err.message });
     }
     res.json({ message: 'Дисциплина успешно добавлена', id: result.insertId });
+  });
+});
+
+// Редактирование дисциплины
+app.put('/api/disciplines/:id', authenticate, isAdmin, (req, res) => {
+  const { id } = req.params;
+  const { name, description } = req.body;
+
+  const sql = 'UPDATE disciplines SET name = ?, description = ? WHERE id = ?';
+  db.query(sql, [name, description, id], (err, result) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    res.json({ message: 'Дисциплина успешно обновлена' });
   });
 });
 
@@ -125,18 +141,6 @@ app.delete('/api/disciplines/:id', authenticate, isAdmin, (req, res) => {
     res.json({ message: 'Дисциплина успешно удалена' });
   });
 });
-app.put('/api/disciplines/:id', authenticate, isAdmin, (req, res) => {
-  const { id } = req.params;
-  const { name, description } = req.body;
-
-  const sql = 'UPDATE disciplines SET name = ?, description = ? WHERE id = ?';
-  db.query(sql, [name, description, id], (err, result) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
-    }
-    res.json({ message: 'Дисциплина успешно обновлена' });
-  });
-});
 
 app.get('/api/disciplines', (req, res) => {
   // Запрос для получения дисциплин
@@ -149,7 +153,7 @@ app.get('/api/disciplines', (req, res) => {
   });
 });
 
-// MATCHES
+// MATCHESZ
 app.get('/api/matches', (req, res) => {
   const { disciplineId } = req.query;
 
