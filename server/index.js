@@ -103,32 +103,37 @@ const isAdmin = (req, res, next) => {
 
 // DISCIPLINES
 
-// Добавление дисциплины
-app.post('/api/disciplines', authenticate, isAdmin, async (req, res) => {
-  const connection = await db.getConnection();
-  
-  try {
-    await connection.beginTransaction();
-    
-    const [result] = await connection.query(
-      'INSERT INTO disciplines (name, description) VALUES (?, ?)',
-      [req.body.name, req.body.description]
-    );
+// Добавление дисциплины с транзакцией
+app.post('/api/disciplines', authenticate, isAdmin, (req, res) => {
+  const { name, description } = req.body;
 
-    await connection.query(
-      'INSERT INTO audit_log (action, user_id) VALUES (?, ?)',
-      ['create_discipline', req.user.id]
-    );
+  // Начинаем транзакцию
+  db.beginTransaction((err) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
 
-    await connection.commit();
-    res.json({ id: result.insertId });
+    const sql = 'INSERT INTO disciplines (name, description) VALUES (?, ?)';
+    db.query(sql, [name, description], (err, result) => {
+      if (err) {
+        // Откатываем транзакцию в случае ошибки
+        return db.rollback(() => {
+          res.status(500).json({ error: err.message });
+        });
+      }
 
-  } catch (error) {
-    await connection.rollback();
-    res.status(500).json({ error: "Transaction failed" });
-  } finally {
-    connection.release();
-  }
+      // Если все успешно, фиксируем транзакцию
+      db.commit((err) => {
+        if (err) {
+          return db.rollback(() => {
+            res.status(500).json({ error: err.message });
+          });
+        }
+
+        res.json({ message: 'Дисциплина успешно добавлена', id: result.insertId });
+      });
+    });
+  });
 });
 
 // Редактирование дисциплины
@@ -168,7 +173,7 @@ app.get('/api/disciplines', (req, res) => {
   });
 });
 
-// MATCHESZ
+// MATCHES
 app.get('/api/matches', (req, res) => {
   const { disciplineId } = req.query;
 
@@ -202,3 +207,4 @@ const PORT = 5000;
 app.listen(PORT, () => {
   console.log(`Сервер запущен на порту ${PORT}`);
 });
+
