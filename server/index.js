@@ -9,9 +9,9 @@ app.use(express.json());
 const db = mysql.createConnection({
   host: 'localhost',
   user: 'root', // пользователь MySQL
-  password: 'admin', //пароль MySQL
+  password: 'admin', // пароль MySQL
   database: 'sport_stat', // замените на имя вашей базы данных
-  port: '3306'
+  port: '3306',
 });
 
 db.connect((err) => {
@@ -38,7 +38,7 @@ app.post('/api/register', async (req, res) => {
   const sql = `
     INSERT INTO users (username, email, password_hash, role)
     VALUES (?, ?, ?, ?)
-  `; 
+  `;
 
   db.query(sql, [username, email, passwordHash, role || 'user'], (err, result) => {
     if (err) {
@@ -106,26 +106,25 @@ const isAdmin = (req, res, next) => {
 // Добавление дисциплины
 app.post('/api/disciplines', authenticate, isAdmin, async (req, res) => {
   const connection = await db.getConnection();
-  
+
   try {
     await connection.beginTransaction();
-    
+
     const [result] = await connection.query(
       'INSERT INTO disciplines (name, description) VALUES (?, ?)',
       [req.body.name, req.body.description]
     );
 
     await connection.query(
-      'INSERT INTO audit_log (action, user_id) VALUES (?, ?)',
-      ['create_discipline', req.user.id]
+      'INSERT INTO logs (action, user_id, table_name, record_id) VALUES (?, ?, ?, ?)',
+      ['create_discipline', req.user.id, 'disciplines', result.insertId]
     );
 
     await connection.commit();
     res.json({ id: result.insertId });
-
   } catch (error) {
     await connection.rollback();
-    res.status(500).json({ error: "Transaction failed" });
+    res.status(500).json({ error: 'Transaction failed' });
   } finally {
     connection.release();
   }
@@ -145,6 +144,7 @@ app.put('/api/disciplines/:id', authenticate, isAdmin, (req, res) => {
   });
 });
 
+// Удаление дисциплины
 app.delete('/api/disciplines/:id', authenticate, isAdmin, (req, res) => {
   const { id } = req.params;
 
@@ -157,8 +157,8 @@ app.delete('/api/disciplines/:id', authenticate, isAdmin, (req, res) => {
   });
 });
 
+// Получение списка дисциплин
 app.get('/api/disciplines', (req, res) => {
-  // Запрос для получения дисциплин
   const sql = 'SELECT * FROM disciplines';
   db.query(sql, (err, results) => {
     if (err) {
@@ -168,7 +168,37 @@ app.get('/api/disciplines', (req, res) => {
   });
 });
 
-// MATCHESZ
+// MATCHES
+
+// Получение списка команд
+app.get('/api/teams', (req, res) => {
+  const sql = 'SELECT * FROM teams';
+  db.query(sql, (err, results) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(results);
+  });
+});
+
+// Добавление матча
+app.post('/api/matches', authenticate, isAdmin, (req, res) => {
+  const { discipline_id, team1_id, team2_id, start_time, end_time, status } = req.body;
+
+  const sql = `
+    INSERT INTO matches (discipline_id, team1_id, team2_id, start_time, end_time, status)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `;
+
+  db.query(sql, [discipline_id, team1_id, team2_id, start_time, end_time || null, status], (err, result) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    res.json({ id: result.insertId, message: 'Матч успешно создан' });
+  });
+});
+
+// Получение матчей по дисциплине
 app.get('/api/matches', (req, res) => {
   const { disciplineId } = req.query;
 

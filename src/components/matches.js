@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import styled from 'styled-components';
+import AddMatchModal from './addMatchModal';
 
 const MatchesContainer = styled.div`
   padding: 20px;
@@ -31,27 +32,63 @@ const MatchCard = styled.div`
   }
 `;
 
-const Matches = () => {
+const Matches = ({ isAdmin }) => {
   const { disciplineId } = useParams();
   const [matches, setMatches] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showAddMatchModal, setShowAddMatchModal] = useState(false);
 
   useEffect(() => {
     fetch(`/api/matches?disciplineId=${disciplineId}`)
-      .then(response => response.json())
-      .then(data => setMatches(data))
-      .catch(error => console.error('Ошибка при загрузке матчей:', error));
+      .then((response) => response.json())
+      .then((data) => setMatches(data))
+      .catch((error) => console.error('Ошибка при загрузке матчей:', error));
   }, [disciplineId]);
 
-  // Фильтрация матчей по названию команды
-  const filteredMatches = matches.filter(match =>
-    match.team1_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    match.team2_name.toLowerCase().includes(searchTerm.toLowerCase())
+  const handleSaveMatch = async (matchData) => {
+    try {
+      console.log('Сохранение матча:', matchData); // Отладочное сообщение
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/matches', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(matchData),
+      });
+  
+      if (!response.ok) throw new Error('Ошибка при сохранении матча');
+  
+      // Обновляем список матчей
+      const updatedMatches = await fetch(`/api/matches?disciplineId=${disciplineId}`).then((res) =>
+        res.json()
+      );
+      setMatches(updatedMatches);
+      setShowAddMatchModal(false);
+    } catch (error) {
+      console.error('Ошибка:', error); // Отладочное сообщение
+    }
+  };
+
+  const filteredMatches = matches.filter(
+    (match) =>
+      match.team1_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      match.team2_name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
     <MatchesContainer>
       <h1>Матчи</h1>
+      {isAdmin && (
+        <button onClick={() => setShowAddMatchModal(true)}>Добавить матч</button>
+      )}
+      {showAddMatchModal && (
+        <AddMatchModal
+          onClose={() => setShowAddMatchModal(false)}
+          onSave={handleSaveMatch}
+        />
+      )}
       <SearchBar
         type="text"
         placeholder="Поиск по командам..."
