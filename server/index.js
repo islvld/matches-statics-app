@@ -105,28 +105,20 @@ const isAdmin = (req, res, next) => {
 
 // Добавление дисциплины
 app.post('/api/disciplines', authenticate, isAdmin, async (req, res) => {
-  const connection = await db.getConnection();
+  const { name, description } = req.body;
 
   try {
-    await connection.beginTransaction();
-
-    const [result] = await connection.query(
+    // Вставляем новую дисциплину
+    const [result] = await db.promise().query(
       'INSERT INTO disciplines (name, description) VALUES (?, ?)',
-      [req.body.name, req.body.description]
+      [name, description]
     );
 
-    await connection.query(
-      'INSERT INTO logs (action, user_id, table_name, record_id) VALUES (?, ?, ?, ?)',
-      ['create_discipline', req.user.id, 'disciplines', result.insertId]
-    );
-
-    await connection.commit();
+    // Возвращаем ID новой дисциплины
     res.json({ id: result.insertId });
   } catch (error) {
-    await connection.rollback();
-    res.status(500).json({ error: 'Transaction failed' });
-  } finally {
-    connection.release();
+    console.error('Ошибка при добавлении дисциплины:', error);
+    res.status(500).json({ error: 'Ошибка при добавлении дисциплины' });
   }
 });
 
@@ -169,7 +161,6 @@ app.get('/api/disciplines', (req, res) => {
 });
 
 // MATCHES
-
 // Получение списка команд
 app.get('/api/teams', (req, res) => {
   const sql = 'SELECT * FROM teams';
@@ -182,26 +173,42 @@ app.get('/api/teams', (req, res) => {
 });
 
 // Добавление матча
-app.post('/api/matches', authenticate, isAdmin, (req, res) => {
-  const { discipline_id, team1_id, team2_id, start_time, end_time, status } = req.body;
+app.post('/api/matches', authenticate, isAdmin, async (req, res) => {
+  const { discipline_id, team1_id, team2_id, start_time, end_time, status, team1_score, team2_score } = req.body;
 
-  const sql = `
-    INSERT INTO matches (discipline_id, team1_id, team2_id, start_time, end_time, status)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `;
+  try {
+    // Создаем матч
+    const [matchResult] = await db.promise().query(
+      'INSERT INTO matches (discipline_id, team1_id, team2_id, start_time, end_time, status) VALUES (?, ?, ?, ?, ?, ?)',
+      [discipline_id, team1_id, team2_id, start_time, end_time || null, status]
+    );
 
-  db.query(sql, [discipline_id, team1_id, team2_id, start_time, end_time || null, status], (err, result) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
+    const matchId = matchResult.insertId;
+
+    // Добавляем строку в таблицу match_statistics с начальным счетом 0:0
+    await db.promise().query(
+      'INSERT INTO match_statistics (match_id, team1_score, team2_score) VALUES (?, 0, 0)',
+      [matchId]
+    );
+
+    // Если матч завершен, обновляем счет
+    if (status === 'completed') {
+      await db.promise().query(
+        'UPDATE match_statistics SET team1_score = ?, team2_score = ? WHERE match_id = ?',
+        [team1_score, team2_score, matchId]
+      );
     }
-    res.json({ id: result.insertId, message: 'Матч успешно создан' });
-  });
-});
 
+    res.json({ id: matchId, message: 'Матч успешно создан' });
+  } catch (error) {
+    console.error('Ошибка при создании матча:', error);
+    res.status(500).json({ error: 'Ошибка при создании матча' });
+  }
+});
 // Получение матчей по дисциплине
 app.get('/api/matches', (req, res) => {
   const { disciplineId } = req.query;
-
+ 
   const sql = `
     SELECT 
       m.id, 

@@ -47,8 +47,14 @@ const Matches = ({ isAdmin }) => {
 
   const handleSaveMatch = async (matchData) => {
     try {
-      console.log('Сохранение матча:', matchData); // Отладочное сообщение
+      console.log('Данные для сохранения:', matchData); // Отладочное сообщение
+  
       const token = localStorage.getItem('token');
+      if (!token) {
+        console.error('Токен авторизации отсутствует');
+        return;
+      }
+  
       const response = await fetch('/api/matches', {
         method: 'POST',
         headers: {
@@ -58,14 +64,16 @@ const Matches = ({ isAdmin }) => {
         body: JSON.stringify(matchData),
       });
   
-      if (!response.ok) throw new Error('Ошибка при сохранении матча');
+      if (!response.ok) {
+        throw new Error('Ошибка при сохранении матча');
+      }
   
       // Обновляем список матчей
       const updatedMatches = await fetch(`/api/matches?disciplineId=${disciplineId}`).then((res) =>
         res.json()
       );
       setMatches(updatedMatches);
-      setShowAddMatchModal(false);
+      setShowAddMatchModal(false); // Закрываем модальное окно
     } catch (error) {
       console.error('Ошибка:', error); // Отладочное сообщение
     }
