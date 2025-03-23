@@ -113,12 +113,21 @@ const Matches = ({ isAdmin }) => {
               <p>Команда 2: {match.team2_name}</p>
               <p>Статус: {match.status}</p>
               {match.status === 'completed' && (
-                <p>
-                  Счет: {match.team1_name} {match.team1_score} - {match.team2_score} {match.team2_name}
-                </p>
-              )}
-              {match.winner_team_id && (
-                <p>Победитель: {match.winner_team_id === match.team1_id ? match.team1_name : match.team2_name}</p>
+                <>
+                  <p>
+                    Счет: {match.team1_name} {match.team1_score} - {match.team2_score} {match.team2_name}
+                  </p>
+                  <p>
+                    Победитель:{" "}
+                    {console.log(`winner_team_id: ${match.winner_team_id}, team1_id: ${match.team1_id}, team2_id: ${match.team2_id}`
+                    )}
+                    {match.winner_team_id === null
+                      ? "Ничья"
+                      : match.winner_team_id === match.team1_id
+                      ? match.team1_name
+                      : match.team2_name}
+                  </p>
+                </>
               )}
             </MatchCard>
           ))}

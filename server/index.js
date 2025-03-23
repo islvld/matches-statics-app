@@ -216,7 +216,9 @@ app.get('/api/matches', (req, res) => {
       m.end_time, 
       m.status, 
       t1.name AS team1_name, 
-      t2.name AS team2_name, 
+      t2.name AS team2_name,
+      t1.id AS team1_id, 
+      t2.id AS team2_id,  
       m.winner_team_id,
       ms.team1_score,
       ms.team2_score
