@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import styled from 'styled-components';
 import AddMatchModal from './addMatchModal';
+import EditMatchModal from './editMatchModal';
+import '../styles.css'; // Импортируем стили
 
 const MatchesContainer = styled.div`
   padding: 20px;
@@ -13,18 +15,24 @@ const SearchBar = styled.input`
   width: 100%;
   padding: 10px;
   margin-bottom: 20px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
   font-size: 16px;
+  outline: none;
+  transition: border-color 0.3s ease;
+
+  &:focus {
+    border-color: #007bff;
+  }
 `;
 
 const MatchCard = styled.div`
-  background: #f9f9f9;
+  background: #fff;
   border: 1px solid #ddd;
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 20px;
   margin-bottom: 20px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
   transition: transform 0.2s;
 
   &:hover {
@@ -37,6 +45,9 @@ const Matches = ({ isAdmin }) => {
   const [matches, setMatches] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddMatchModal, setShowAddMatchModal] = useState(false);
+  const [showEditMatchModal, setShowEditMatchModal] = useState(false);
+  const [selectedMatch, setSelectedMatch] = useState(null);
+  const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
     fetch(`/api/matches?disciplineId=${disciplineId}`)
@@ -47,14 +58,12 @@ const Matches = ({ isAdmin }) => {
 
   const handleSaveMatch = async (matchData) => {
     try {
-      console.log('Данные для сохранения:', matchData); // Отладочное сообщение
-  
       const token = localStorage.getItem('token');
       if (!token) {
         console.error('Токен авторизации отсутствует');
         return;
       }
-  
+
       const response = await fetch('/api/matches', {
         method: 'POST',
         headers: {
@@ -63,19 +72,74 @@ const Matches = ({ isAdmin }) => {
         },
         body: JSON.stringify(matchData),
       });
-  
+
       if (!response.ok) {
         throw new Error('Ошибка при сохранении матча');
       }
-  
-      // Обновляем список матчей
+
       const updatedMatches = await fetch(`/api/matches?disciplineId=${disciplineId}`).then((res) =>
         res.json()
       );
       setMatches(updatedMatches);
-      setShowAddMatchModal(false); // Закрываем модальное окно
+      setShowAddMatchModal(false);
     } catch (error) {
-      console.error('Ошибка:', error); // Отладочное сообщение
+      console.error('Ошибка:', error);
+      setErrorMessage('Ошибка при сохранении матча');
+      setTimeout(() => setErrorMessage(''), 3000);
+    }
+  };
+
+  const handleEditMatch = async (matchData) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/matches/${matchData.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(matchData),
+      });
+
+      if (!response.ok) {
+        throw new Error('Ошибка при обновлении матча');
+      }
+
+      const updatedMatches = await fetch(`/api/matches?disciplineId=${disciplineId}`).then((res) =>
+        res.json()
+      );
+      setMatches(updatedMatches);
+      setShowEditMatchModal(false);
+    } catch (error) {
+      console.error('Ошибка:', error);
+      setErrorMessage('Ошибка при обновлении матча');
+      setTimeout(() => setErrorMessage(''), 3000);
+    }
+  };
+
+  const handleDeleteMatch = async (id) => {
+    const confirmDelete = window.confirm('Вы уверены, что хотите удалить матч?');
+    if (!confirmDelete) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/matches/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+        throw new Error('Ошибка при удалении матча');
+      }
+
+      const updatedMatches = await fetch(`/api/matches?disciplineId=${disciplineId}`).then((res) =>
+        res.json()
+      );
+      setMatches(updatedMatches);
+    } catch (error) {
+      console.error('Ошибка:', error);
+      setErrorMessage('Ошибка при удалении матча');
+      setTimeout(() => setErrorMessage(''), 3000);
     }
   };
 
@@ -89,12 +153,21 @@ const Matches = ({ isAdmin }) => {
     <MatchesContainer>
       <h1>Матчи</h1>
       {isAdmin && (
-        <button onClick={() => setShowAddMatchModal(true)}>Добавить матч</button>
+        <button className="add-button" onClick={() => setShowAddMatchModal(true)}>
+          Добавить матч
+        </button>
       )}
       {showAddMatchModal && (
         <AddMatchModal
           onClose={() => setShowAddMatchModal(false)}
           onSave={handleSaveMatch}
+        />
+      )}
+      {showEditMatchModal && (
+        <EditMatchModal
+          match={selectedMatch}
+          onClose={() => setShowEditMatchModal(false)}
+          onSave={handleEditMatch}
         />
       )}
       <SearchBar
@@ -119,8 +192,6 @@ const Matches = ({ isAdmin }) => {
                   </p>
                   <p>
                     Победитель:{" "}
-                    {console.log(`winner_team_id: ${match.winner_team_id}, team1_id: ${match.team1_id}, team2_id: ${match.team2_id}`
-                    )}
                     {match.winner_team_id === null
                       ? "Ничья"
                       : match.winner_team_id === match.team1_id
@@ -129,11 +200,39 @@ const Matches = ({ isAdmin }) => {
                   </p>
                 </>
               )}
+              {isAdmin && (
+                <div>
+                  <button
+                    className="edit-button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedMatch(match);
+                      setShowEditMatchModal(true);
+                    }}
+                  >
+                    ✏️ Редактировать
+                  </button>
+                  <button
+                    className="delete-button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteMatch(match.id);
+                    }}
+                  >
+                    🗑️ Удалить
+                  </button>
+                </div>
+              )}
             </MatchCard>
           ))}
         </div>
       ) : (
         <p>Нет матчей для отображения</p>
+      )}
+      {errorMessage && (
+        <div className="error-message">
+          {errorMessage}
+        </div>
       )}
     </MatchesContainer>
   );

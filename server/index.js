@@ -237,6 +237,65 @@ app.get('/api/matches', (req, res) => {
   });
 });
 
+// Редактирование матча
+app.put('/api/matches/:id', authenticate, isAdmin, (req, res) => {
+  const { id } = req.params;
+  const { team1_id, team2_id, start_time, end_time, status, team1_score, team2_score, winner_team_id } = req.body;
+
+  const sql = `
+    UPDATE matches 
+    SET 
+      team1_id = ?, 
+      team2_id = ?, 
+      start_time = ?, 
+      end_time = ?, 
+      status = ?, 
+      winner_team_id = ?
+    WHERE id = ?
+  `;
+
+  db.query(
+    sql,
+    [team1_id, team2_id, start_time, end_time || null, status, winner_team_id || null, id],
+    (err, result) => {
+      if (err) {
+        return res.status(500).json({ error: err.message });
+      }
+
+      // Обновляем счет в таблице match_statistics
+      const updateScoreSql = `
+        UPDATE match_statistics 
+        SET team1_score = ?, team2_score = ?
+        WHERE match_id = ?
+      `;
+
+      db.query(
+        updateScoreSql,
+        [team1_score, team2_score, id],
+        (err, result) => {
+          if (err) {
+            return res.status(500).json({ error: err.message });
+          }
+          res.json({ message: 'Матч успешно обновлен' });
+        }
+      );
+    }
+  );
+});
+
+// Удаление матча
+app.delete('/api/matches/:id', authenticate, isAdmin, (req, res) => {
+  const { id } = req.params;
+
+  const sql = 'DELETE FROM matches WHERE id = ?';
+  db.query(sql, [id], (err, result) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    res.json({ message: 'Матч успешно удален' });
+  });
+});
+
 const PORT = 5000;
 app.listen(PORT, () => {
   console.log(`Сервер запущен на порту ${PORT}`);
