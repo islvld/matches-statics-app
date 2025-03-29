@@ -177,6 +177,9 @@ app.post('/api/matches', authenticate, isAdmin, async (req, res) => {
   const { discipline_id, team1_id, team2_id, start_time, end_time, status, team1_score, team2_score } = req.body;
 
   try {
+    // Начинаем транзакцию
+    await db.promise().query('START TRANSACTION');
+
     // Создаем матч
     const [matchResult] = await db.promise().query(
       'INSERT INTO matches (discipline_id, team1_id, team2_id, start_time, end_time, status) VALUES (?, ?, ?, ?, ?, ?)',
@@ -185,7 +188,7 @@ app.post('/api/matches', authenticate, isAdmin, async (req, res) => {
 
     const matchId = matchResult.insertId;
 
-    // Добавляем строку в таблицу match_statistics с начальным счетом 0:0
+    // Добавляем статистику
     await db.promise().query(
       'INSERT INTO match_statistics (match_id, team1_score, team2_score) VALUES (?, 0, 0)',
       [matchId]
@@ -199,8 +202,13 @@ app.post('/api/matches', authenticate, isAdmin, async (req, res) => {
       );
     }
 
+    // Фиксируем транзакцию
+    await db.promise().query('COMMIT');
+    
     res.json({ id: matchId, message: 'Матч успешно создан' });
   } catch (error) {
+    // Откатываем транзакцию при ошибке
+    await db.promise().query('ROLLBACK');
     console.error('Ошибка при создании матча:', error);
     res.status(500).json({ error: 'Ошибка при создании матча' });
   }
