@@ -2,7 +2,7 @@ import styled from 'styled-components';
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import EditDisciplineModal from './editDisciplineModal';
-import '../styles.css'; // Импорт стилей
+import '../styles.css';
 
 const DisciplinesContainer = styled.div`
   padding: 20px;
@@ -34,20 +34,66 @@ const DisciplineCard = styled.div`
   }
 `;
 
+const Pagination = styled.div`
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+  gap: 10px;
+`;
+
+const PageButton = styled.button`
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  background: ${props => props.active ? '#007bff' : 'white'};
+  color: ${props => props.active ? 'white' : '#333'};
+  border-radius: 4px;
+  cursor: pointer;
+
+  &:hover {
+    background: ${props => props.active ? '#0056b3' : '#f5f5f5'};
+  }
+`;
+
 const Disciplines = ({ isAdmin }) => {
   const [disciplines, setDisciplines] = useState([]);
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    totalItems: 0,
+    itemsPerPage: 10
+  });
   const [searchTerm, setSearchTerm] = useState('');
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedDiscipline, setSelectedDiscipline] = useState(null);
   const [errorMessage, setErrorMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
+  const fetchDisciplines = async (page = 1, limit = 3) => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`/api/disciplines?page=${page}&limit=${limit}`);
+      const data = await response.json();
+      
+      setDisciplines(data.data);
+      setPagination(data.pagination);
+    } catch (error) {
+      console.error('Ошибка при загрузке дисциплин:', error);
+      setErrorMessage('Ошибка при загрузке данных');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    fetch('/api/disciplines')
-      .then(response => response.json())
-      .then(data => setDisciplines(data))
-      .catch(error => console.error('Ошибка при загрузке дисциплин:', error));
+    fetchDisciplines();
   }, []);
+
+  const handlePageChange = (page) => {
+    if (page >= 1 && page <= pagination.totalPages) {
+      fetchDisciplines(page, pagination.itemsPerPage);
+    }
+  };
 
   const filteredDisciplines = disciplines.filter(discipline =>
     discipline.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -147,51 +193,105 @@ const Disciplines = ({ isAdmin }) => {
         <button
           className="add-button"
           onClick={() => {
-            setSelectedDiscipline(null); // Сброс выбранной дисциплины для добавления
+            setSelectedDiscipline(null);
             setShowEditModal(true);
           }}
         >
           Добавить дисциплину
         </button>
       )}
-      {filteredDisciplines.length > 0 ? (
-        <div>
-          {filteredDisciplines.map((discipline) => (
-            <DisciplineCard
-              key={discipline.id}
-              onClick={() => handleDisciplineClick(discipline.id)}
+      
+      {isLoading ? (
+        <p>Загрузка...</p>
+      ) : filteredDisciplines.length > 0 ? (
+        <>
+          <div>
+            {filteredDisciplines.map((discipline) => (
+              <DisciplineCard
+                key={discipline.id}
+                onClick={() => handleDisciplineClick(discipline.id)}
+              >
+                <h2>{discipline.name}</h2>
+                <p>{discipline.description || 'Описание отсутствует'}</p>
+                {isAdmin && (
+                  <div>
+                    <button
+                      className="edit-button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedDiscipline(discipline);
+                        setShowEditModal(true);
+                      }}
+                    >
+                      ✏️ Редактировать
+                    </button>
+                    <button
+                      className="delete-button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(discipline.id);
+                      }}
+                    >
+                      🗑️ Удалить
+                    </button>
+                  </div>
+                )}
+              </DisciplineCard>
+            ))}
+          </div>
+          
+          <Pagination>
+            <PageButton 
+              onClick={() => handlePageChange(1)}
+              disabled={pagination.currentPage === 1}
             >
-              <h2>{discipline.name}</h2>
-              <p>{discipline.description || 'Описание отсутствует'}</p>
-              {isAdmin && (
-                <div>
-                  <button
-                    className="edit-button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedDiscipline(discipline);
-                      setShowEditModal(true);
-                    }}
-                  >
-                    ✏️ Редактировать
-                  </button>
-                  <button
-                    className="delete-button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete(discipline.id);
-                    }}
-                  >
-                    🗑️ Удалить
-                  </button>
-                </div>
-              )}
-            </DisciplineCard>
-          ))}
-        </div>
+              «
+            </PageButton>
+            <PageButton 
+              onClick={() => handlePageChange(pagination.currentPage - 1)}
+              disabled={pagination.currentPage === 1}
+            >
+              ‹
+            </PageButton>
+            
+            {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+              const page = Math.max(1, Math.min(
+                pagination.currentPage - 2,
+                pagination.totalPages - 4
+              )) + i;
+              return (
+                <PageButton
+                  key={page}
+                  onClick={() => handlePageChange(page)}
+                  active={page === pagination.currentPage}
+                >
+                  {page}
+                </PageButton>
+              );
+            })}
+            
+            <PageButton 
+              onClick={() => handlePageChange(pagination.currentPage + 1)}
+              disabled={pagination.currentPage === pagination.totalPages}
+            >
+              ›
+            </PageButton>
+            <PageButton 
+              onClick={() => handlePageChange(pagination.totalPages)}
+              disabled={pagination.currentPage === pagination.totalPages}
+            >
+              »
+            </PageButton>
+          </Pagination>
+          
+          <div style={{ textAlign: 'center', marginTop: '10px' }}>
+            Страница {pagination.currentPage} из {pagination.totalPages}
+          </div>
+        </>
       ) : (
         <p>Нет данных для отображения</p>
       )}
+      
       {showEditModal && (
         <EditDisciplineModal
           discipline={selectedDiscipline}

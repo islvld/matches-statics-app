@@ -1,8 +1,10 @@
-const express = require('express');
-const mysql = require('mysql2');
-const cors = require('cors');
 
-const app = express();
+// Выносим создание сервера в функцию
+function createServer() {
+  const express = require('express');
+  const mysql = require('mysql2');
+  const cors = require('cors');
+  const app = express();
 app.use(cors());
 app.use(express.json());
 
@@ -27,6 +29,8 @@ const jwt = require('jsonwebtoken');
 
 // Секретный ключ для JWT
 const JWT_SECRET = 'FORTUNA812';
+
+
 
 // Регистрация пользователя
 app.post('/api/register', async (req, res) => {
@@ -149,16 +153,52 @@ app.delete('/api/disciplines/:id', authenticate, isAdmin, (req, res) => {
   });
 });
 
-// Получение списка дисциплин
+// Получение списка дисциплин с пагинацией
 app.get('/api/disciplines', (req, res) => {
-  const sql = 'SELECT * FROM disciplines';
-  db.query(sql, (err, results) => {
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
+  const offset = (page - 1) * limit;
+
+  // Получаем общее количество дисциплин
+  db.query('SELECT COUNT(*) as count FROM disciplines', (err, countResult) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
-    res.json(results);
+
+    const total = countResult[0].count;
+    const totalPages = Math.ceil(total / limit);
+
+    // Получаем данные для текущей страницы
+    db.query(
+      'SELECT * FROM disciplines LIMIT ? OFFSET ?',
+      [limit, offset],
+      (err, results) => {
+        if (err) {
+          return res.status(500).json({ error: err.message });
+        }
+
+        res.json({
+          data: results,
+          pagination: {
+            currentPage: page,
+            totalPages,
+            totalItems: total,
+            itemsPerPage: limit
+          }
+        });
+      }
+    );
   });
 });
+//app.get('/api/disciplines', (req, res) => {
+  //const sql = 'SELECT * FROM disciplines';
+  //db.query(sql, (err, results) => {
+    //if (err) {
+      //return res.status(500).json({ error: err.message });
+    //}
+    //res.json(results);
+  //});
+//});
 
 // MATCHES
 // Получение списка команд
@@ -213,11 +253,12 @@ app.post('/api/matches', authenticate, isAdmin, async (req, res) => {
     res.status(500).json({ error: 'Ошибка при создании матча' });
   }
 });
-// Получение матчей по дисциплине
+// Получение списка матчей с пагинацией
 app.get('/api/matches', (req, res) => {
-  const { disciplineId } = req.query;
- 
-  const sql = `
+  const { disciplineId, page = 1, limit = 10, search = '' } = req.query;
+  const offset = (page - 1) * limit;
+
+  let baseQuery = `
     SELECT 
       m.id, 
       m.start_time, 
@@ -237,13 +278,86 @@ app.get('/api/matches', (req, res) => {
     WHERE m.discipline_id = ?
   `;
 
-  db.query(sql, [disciplineId], (err, results) => {
+  let countQuery = `
+    SELECT COUNT(*) as count 
+    FROM matches m
+    WHERE m.discipline_id = ?
+  `;
+
+  const queryParams = [disciplineId];
+  const countParams = [disciplineId];
+
+  if (search) {
+    const searchTerm = `%${search}%`;
+    baseQuery += ` AND (t1.name LIKE ? OR t2.name LIKE ?)`;
+    countQuery += ` AND (m.team1_id IN (SELECT id FROM teams WHERE name LIKE ?) 
+                  OR m.team2_id IN (SELECT id FROM teams WHERE name LIKE ?))`;
+    queryParams.push(searchTerm, searchTerm);
+    countParams.push(searchTerm, searchTerm);
+  }
+
+  // Сначала получаем общее количество
+  db.query(countQuery, countParams, (err, countResult) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
-    res.json(results);
+
+    const total = countResult[0].count;
+    const totalPages = Math.ceil(total / limit);
+
+    // Затем получаем данные для страницы
+    db.query(
+      `${baseQuery} LIMIT ? OFFSET ?`,
+      [...queryParams, parseInt(limit), parseInt(offset)],
+      (err, results) => {
+        if (err) {
+          return res.status(500).json({ error: err.message });
+        }
+
+        res.json({
+          data: results,
+          pagination: {
+            currentPage: parseInt(page),
+            totalPages,
+            totalItems: total,
+            itemsPerPage: parseInt(limit)
+          }
+        });
+      }
+    );
   });
 });
+// Получение матчей по дисциплине
+//app.get('/api/matches', (req, res) => {
+  //const { disciplineId } = req.query;
+ //
+  //const sql = `
+    //SELECT 
+      //m.id, 
+      //m.start_time, 
+      //m.end_time, 
+      //m.status, 
+      //t1.name AS team1_name, 
+      //t2.name AS team2_name,
+      //t1.id AS team1_id, 
+      //t2.id AS team2_id,  
+      //m.winner_team_id,
+      //ms.team1_score,
+      //ms.team2_score
+    //FROM matches m
+    //JOIN teams t1 ON m.team1_id = t1.id
+    //JOIN teams t2 ON m.team2_id = t2.id
+    //LEFT JOIN match_statistics ms ON m.id = ms.match_id
+    //WHERE m.discipline_id = ?
+  //`;
+
+  //db.query(sql, [disciplineId], (err, results) => {
+    //if (err) {
+      //return res.status(500).json({ error: err.message });
+    //}
+    //res.json(results);
+  //});
+//});
 
 // Редактирование матча
 app.put('/api/matches/:id', authenticate, isAdmin, (req, res) => {
@@ -303,9 +417,25 @@ app.delete('/api/matches/:id', authenticate, isAdmin, (req, res) => {
     res.json({ message: 'Матч успешно удален' });
   });
 });
+  
+  return {
+    app,
+    db // если нужно тестировать подключение
+  };
+  return {
+    app,
+    db // если нужно тестировать подключение
+  };
+}
 
-const PORT = 5000;
-app.listen(PORT, () => {
-  console.log(`Сервер запущен на порту ${PORT}`);
-});
+
+// Стандартный экспорт для обычного использования
+if (require.main === module) {
+  const { app } = createServer();
+  const PORT = 5000;
+  app.listen(PORT, () => {
+    console.log(`Сервер запущен на порту ${PORT}`);
+  });
+}
+
 

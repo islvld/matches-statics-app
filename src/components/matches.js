@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import styled from 'styled-components';
 import AddMatchModal from './addMatchModal';
 import EditMatchModal from './editMatchModal';
-import '../styles.css'; // Импортируем стили
+import '../styles.css';
 
 const MatchesContainer = styled.div`
   padding: 20px;
@@ -40,21 +40,69 @@ const MatchCard = styled.div`
   }
 `;
 
+const Pagination = styled.div`
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+  gap: 10px;
+`;
+
+const PageButton = styled.button`
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  background: ${props => props.active ? '#007bff' : 'white'};
+  color: ${props => props.active ? 'white' : '#333'};
+  border-radius: 4px;
+  cursor: pointer;
+
+  &:hover {
+    background: ${props => props.active ? '#0056b3' : '#f5f5f5'};
+  }
+`;
+
 const Matches = ({ isAdmin }) => {
   const { disciplineId } = useParams();
   const [matches, setMatches] = useState([]);
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    totalItems: 0,
+    itemsPerPage: 3
+  });
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddMatchModal, setShowAddMatchModal] = useState(false);
   const [showEditMatchModal, setShowEditMatchModal] = useState(false);
   const [selectedMatch, setSelectedMatch] = useState(null);
   const [errorMessage, setErrorMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Обернули fetchMatches в useCallback
+  const fetchMatches = useCallback(async (page = 1, limit = 3, search = '') => {
+    setIsLoading(true);
+    try {
+      const url = `/api/matches?disciplineId=${disciplineId}&page=${page}&limit=${limit}&search=${encodeURIComponent(search)}`;
+      const response = await fetch(url);
+      const data = await response.json();
+      
+      setMatches(data.data);
+      setPagination(data.pagination);
+    } catch (error) {
+      console.error('Ошибка при загрузке матчей:', error);
+      setErrorMessage('Ошибка при загрузке данных');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [disciplineId]); // Зависимости useCallback
 
   useEffect(() => {
-    fetch(`/api/matches?disciplineId=${disciplineId}`)
-      .then((response) => response.json())
-      .then((data) => setMatches(data))
-      .catch((error) => console.error('Ошибка при загрузке матчей:', error));
-  }, [disciplineId]);
+    fetchMatches(1, pagination.itemsPerPage, searchTerm);
+  }, [fetchMatches, pagination.itemsPerPage, searchTerm]); 
+
+  const handlePageChange = (page) => {
+    if (page >= 1 && page <= pagination.totalPages) {
+      fetchMatches(page, pagination.itemsPerPage, searchTerm);
+    }
+  };
 
   const handleSaveMatch = async (matchData) => {
     try {
@@ -77,10 +125,7 @@ const Matches = ({ isAdmin }) => {
         throw new Error('Ошибка при сохранении матча');
       }
 
-      const updatedMatches = await fetch(`/api/matches?disciplineId=${disciplineId}`).then((res) =>
-        res.json()
-      );
-      setMatches(updatedMatches);
+      fetchMatches(pagination.currentPage, pagination.itemsPerPage, searchTerm);
       setShowAddMatchModal(false);
     } catch (error) {
       console.error('Ошибка:', error);
@@ -105,10 +150,7 @@ const Matches = ({ isAdmin }) => {
         throw new Error('Ошибка при обновлении матча');
       }
 
-      const updatedMatches = await fetch(`/api/matches?disciplineId=${disciplineId}`).then((res) =>
-        res.json()
-      );
-      setMatches(updatedMatches);
+      fetchMatches(pagination.currentPage, pagination.itemsPerPage, searchTerm);
       setShowEditMatchModal(false);
     } catch (error) {
       console.error('Ошибка:', error);
@@ -132,22 +174,13 @@ const Matches = ({ isAdmin }) => {
         throw new Error('Ошибка при удалении матча');
       }
 
-      const updatedMatches = await fetch(`/api/matches?disciplineId=${disciplineId}`).then((res) =>
-        res.json()
-      );
-      setMatches(updatedMatches);
+      fetchMatches(pagination.currentPage, pagination.itemsPerPage, searchTerm);
     } catch (error) {
       console.error('Ошибка:', error);
       setErrorMessage('Ошибка при удалении матча');
       setTimeout(() => setErrorMessage(''), 3000);
     }
   };
-
-  const filteredMatches = matches.filter(
-    (match) =>
-      match.team1_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      match.team2_name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   return (
     <MatchesContainer>
@@ -161,6 +194,7 @@ const Matches = ({ isAdmin }) => {
         <AddMatchModal
           onClose={() => setShowAddMatchModal(false)}
           onSave={handleSaveMatch}
+          disciplineId={disciplineId}
         />
       )}
       {showEditMatchModal && (
@@ -176,56 +210,108 @@ const Matches = ({ isAdmin }) => {
         value={searchTerm}
         onChange={(e) => setSearchTerm(e.target.value)}
       />
-      {filteredMatches.length > 0 ? (
-        <div>
-          {filteredMatches.map((match) => (
-            <MatchCard key={match.id}>
-              <h2>Событие #{match.id}</h2>
-              <p>Дата и время: {new Date(match.start_time).toLocaleString()}</p>
-              <p>Команда 1: {match.team1_name}</p>
-              <p>Команда 2: {match.team2_name}</p>
-              <p>Статус: {match.status}</p>
-              {match.status === 'completed' && (
-                <>
-                  <p>
-                    Счет: {match.team1_name} {match.team1_score} - {match.team2_score} {match.team2_name}
-                  </p>
-                  <p>
-                    Победитель:{" "}
-                    {match.winner_team_id === null
-                      ? "Ничья"
-                      : match.winner_team_id === match.team1_id
-                      ? match.team1_name
-                      : match.team2_name}
-                  </p>
-                </>
-              )}
-              {isAdmin && (
-                <div>
-                  <button
-                    className="edit-button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedMatch(match);
-                      setShowEditMatchModal(true);
-                    }}
-                  >
-                    ✏️ Редактировать
-                  </button>
-                  <button
-                    className="delete-button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteMatch(match.id);
-                    }}
-                  >
-                    🗑️ Удалить
-                  </button>
-                </div>
-              )}
-            </MatchCard>
-          ))}
-        </div>
+      {isLoading ? (
+        <p>Загрузка...</p>
+      ) : matches.length > 0 ? (
+        <>
+          <div>
+            {matches.map((match) => (
+              <MatchCard key={match.id}>
+                <h2>Событие #{match.id}</h2>
+                <p>Дата и время: {new Date(match.start_time).toLocaleString()}</p>
+                <p>Команда 1: {match.team1_name}</p>
+                <p>Команда 2: {match.team2_name}</p>
+                <p>Статус: {match.status}</p>
+                {match.status === 'completed' && (
+                  <>
+                    <p>
+                      Счет: {match.team1_name} {match.team1_score} - {match.team2_score} {match.team2_name}
+                    </p>
+                    <p>
+                      Победитель:{" "}
+                      {match.winner_team_id === null
+                        ? "Ничья"
+                        : match.winner_team_id === match.team1_id
+                        ? match.team1_name
+                        : match.team2_name}
+                    </p>
+                  </>
+                )}
+                {isAdmin && (
+                  <div>
+                    <button
+                      className="edit-button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedMatch(match);
+                        setShowEditMatchModal(true);
+                      }}
+                    >
+                      ✏️ Редактировать
+                    </button>
+                    <button
+                      className="delete-button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteMatch(match.id);
+                      }}
+                    >
+                      🗑️ Удалить
+                    </button>
+                  </div>
+                )}
+              </MatchCard>
+            ))}
+          </div>
+          
+          <Pagination>
+            <PageButton 
+              onClick={() => handlePageChange(1)}
+              disabled={pagination.currentPage === 1}
+            >
+              «
+            </PageButton>
+            <PageButton 
+              onClick={() => handlePageChange(pagination.currentPage - 1)}
+              disabled={pagination.currentPage === 1}
+            >
+              ‹
+            </PageButton>
+            
+            {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+              const page = Math.max(1, Math.min(
+                pagination.currentPage - 2,
+                pagination.totalPages - 4
+              )) + i;
+              return (
+                <PageButton
+                  key={page}
+                  onClick={() => handlePageChange(page)}
+                  active={page === pagination.currentPage}
+                >
+                  {page}
+                </PageButton>
+              );
+            })}
+            
+            <PageButton 
+              onClick={() => handlePageChange(pagination.currentPage + 1)}
+              disabled={pagination.currentPage === pagination.totalPages}
+            >
+              ›
+            </PageButton>
+            <PageButton 
+              onClick={() => handlePageChange(pagination.totalPages)}
+              disabled={pagination.currentPage === pagination.totalPages}
+            >
+              »
+            </PageButton>
+          </Pagination>
+          
+          <div style={{ textAlign: 'center', marginTop: '10px' }}>
+            Страница {pagination.currentPage} из {pagination.totalPages}
+          </div>
+        </>
       ) : (
         <p>Нет матчей для отображения</p>
       )}
